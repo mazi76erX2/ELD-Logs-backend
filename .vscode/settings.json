@@ -1,0 +1,31 @@
+{
+    "python.testing.pytestArgs": [],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "pylint.args": [
+        "--rcfile=setup.cfg"
+    ],
+    "cSpell.words": [
+        "Analyser",
+        "asgi",
+        "ASGI",
+        "corsheaders",
+        "Incompleete",
+        "mediafiles",
+        "pipenv",
+        "postgresapp",
+        "psql",
+        "runserver",
+        "serever",
+        "venv",
+        "yasg"
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports.isort": "explicit",
+        },
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true
+    }
+}

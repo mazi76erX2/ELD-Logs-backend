@@ -1,0 +1,18 @@
+name: Format and Lint
+on: [pull_request, push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+      - run: pip install --upgrade pip
+      - run: pip install pipenv
+      - run: pipenv install black isort mypy pylint django-stubs djangorestframework-stubs drf-yasg-stubs
+      - run: pipenv run black --diff --check $(git ls-files '*.py') --exclude=example_app
+      - run: pipenv run pylint --disable=all --enable=unused-import $(git ls-files '*.py') --ignore=example_app
+      - run: pipenv run mypy $(git ls-files '*.py') --exclude example_app
