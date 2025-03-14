@@ -1,6 +1,6 @@
 from .base import *
 
-ALLOWED_HOSTS = ["0.0.0.0", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["0.0.0.0", "localhost", "127.0.0.1", "157.230.27.16"]
 
 # define which origins are allowed
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]

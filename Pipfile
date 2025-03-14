@@ -15,6 +15,11 @@ django-cors-headers = "4.5.0"
 gunicorn = "23.0.0"
 uvicorn = "0.32.0"
 django-debug-toolbar = "4.4.6"
+polyline = "*"
+requests = "*"
+aiohttp = "*"
+pillow = "*"
+numpy = "*"
 
 [dev-packages]
 mypy = "1.13.0"

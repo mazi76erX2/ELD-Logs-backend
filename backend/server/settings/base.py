@@ -52,6 +52,9 @@ INSTALLED_APPS = [
     # 3rd-party
     "rest_framework",
     "corsheaders",
+    "drf_yasg",
+    # app
+    "trip_planner",
 ]
 
 # define which origins are allowed
@@ -59,11 +62,8 @@ CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 # configure DRF
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework.authentication.TokenAuthentication",
-    ),
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
+        "rest_framework.permissions.AllowAny",
     ],
 }
 
@@ -115,6 +115,14 @@ DATABASES = {
     }
 }
 
+REDIS_LOCATION = os.environ.get("REDIS_LOCATION", "redis://redis:6379")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_LOCATION,
+    }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators

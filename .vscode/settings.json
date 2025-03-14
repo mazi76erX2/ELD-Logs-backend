@@ -27,5 +27,7 @@
         },
         "editor.formatOnSave": true,
         "editor.formatOnType": true
-    }
+    },
+    "deepscan.enable": true,
+    "deepscan.ignoreConfirmWarning": true
 }
