@@ -3,15 +3,11 @@ services:
     restart: unless-stopped
     build:
       context: .
-      dockerfile: ./docker/backend/Dockerfile
-    entrypoint: /app/docker/backend/entrypoint.sh
-    command: [
-        "sh",
-        "-c",
-        "pip install debugpy -t /tmp &&
-        python /tmp/debugpy --wait-for-client --listen 0.0.0.0:5678
-        ./manage.py runserver 0.0.0.0:8000",
-      ]
+      dockerfile: ./docker/backend/Dockerfile.debug
+    entrypoint: /entrypoint.sh
+    command: >
+      sh -c "python -m debugpy --wait-for-client --listen 0.0.0.0:5678 
+      manage.py runserver 0.0.0.0:8000"
     depends_on:
       - db
     networks:
@@ -21,22 +17,14 @@ services:
       - 5678:5678
     expose:
       - 8000
+      - 5678
     env_file:
       - ./.env
-    develop:
-      watch:
-        - action: sync
-          path: ./
-          target: /app
-          ignore:
-            - "*.pyc"
-            - "__pycache__/"
-            - ".git/"
-            - "docker/"
-        - action: rebuild
-          path: Pipfile
-        - action: rebuild
-          path: Pipfile.lock
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
   db:
     image: postgres:17-bullseye
     restart: always
@@ -63,5 +51,4 @@ volumes:
 
 networks:
   backend:
-    # Use a custom driver which takes special options
     driver: bridge

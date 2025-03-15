@@ -10,7 +10,17 @@
           "build": true
         },
         "files": ["${workspaceFolder}/docker-compose-debug.yml"]
-      }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Stop Debug Containers",
+      "type": "docker-compose",
+      "dockerCompose": {
+        "down": {},
+        "files": ["${workspaceFolder}/docker-compose-debug.yml"]
+      },
+      "problemMatcher": []
     }
   ]
 }

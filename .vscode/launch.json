@@ -26,7 +26,8 @@
         }
       ],
       "preLaunchTask": "Build and Start Containers (Debug)",
-      "django": true
+      "django": true,
+      "justMyCode": false
     }
   ]
 }

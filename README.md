@@ -186,3 +186,6 @@ For detailed usage of each command, refer to the `Makefile` provided in the proj
 - **OpenAPI**: OpenAPI is a specification for building APIs. It provides a standard way to describe APIs, which makes it easier to understand and work with APIs. It also provides tools for generating client libraries and documentation, which can be very useful when building and consuming APIs.
 - **Docker**: Docker is a popular tool for building, shipping, and running applications in containers. It provides a lightweight and portable way to package applications and their dependencies, which makes it easy to deploy applications in different environments.
 - **Redis**: Redis is an in-memory data store that can be used to cache data and speed up applications. It is a popular choice for caching data in web applications and can be used to store the results of sentiment analysis requests.
+
+
+https://medium.com/walmartglobaltech/finding-and-plotting-optimal-route-using-open-source-api-in-python-cdcda596996c
