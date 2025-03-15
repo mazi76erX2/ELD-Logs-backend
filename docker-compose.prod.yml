@@ -57,9 +57,17 @@ services:
       - 1337:80
     depends_on:
       - backend
-
 volumes:
-  static_volume: {}
+  static_volume: 
+    driver_opts:
+      type: none
+      device: ${PWD}/../staticfiles
+      o: bind
+  media_volume:
+    driver_opts:
+      type: none
+      device: ${PWD}/../mediafiles
+      o: bind
   db: {}
 
 networks:

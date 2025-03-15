@@ -18,6 +18,10 @@ services:
       - 8000
     env_file:
       - ./.env
+    volumes:
+      - .:/app
+      - ../mediafiles:/app/mediafiles
+      - ../staticfiles:/app/staticfiles
     develop:
       watch:
         - action: sync
@@ -74,7 +78,16 @@ services:
     networks:
       - backend
 volumes:
-  static_volume: {}
+  static_volume: 
+    driver_opts:
+      type: none
+      device: ${PWD}/../staticfiles
+      o: bind
+  media_volume:
+    driver_opts:
+      type: none
+      device: ${PWD}/../mediafiles
+      o: bind
   db: {}
 
 networks:

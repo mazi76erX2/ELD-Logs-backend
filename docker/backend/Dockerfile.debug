@@ -21,7 +21,7 @@ COPY Pipfile Pipfile.lock ./
 
 # Install dependencies based on Pipfile
 WORKDIR /app
-RUN pipenv install --system --deploy
+RUN pipenv install --system --deploy --dev
 
 # Copy application code
 COPY . .
