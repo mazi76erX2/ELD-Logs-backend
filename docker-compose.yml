@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/backend/Dockerfile
-      target: app  # Target the 'app' stage for development
+      target: app
     entrypoint: /app/docker/backend/entrypoint.sh
     command: python manage.py runserver 0.0.0.0:8000
     depends_on:
@@ -69,6 +69,10 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     depends_on:
       - db
+    expose:
+      - 8888
+    networks:
+      - backend
 volumes:
   static_volume: {}
   db: {}
