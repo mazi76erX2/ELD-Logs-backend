@@ -1,11 +1,11 @@
 import logging
 from typing import Any, Dict, Optional, Tuple
+import json
 
 import aiohttp
 import redis
 from django.conf import settings
 
-from ..models import Location, RouteSegment, Trip
 
 # Initialize Redis connection
 redis_client = redis.Redis.from_url(settings.REDIS_LOCATION)
@@ -25,36 +25,44 @@ class RoutingService:
         cache_key = f"geocode:{address}"
         cached_result = redis_client.get(cache_key)
 
-        # if cached_result:
-        #     return dict(eval((await cached_result).decode("utf-8")))
+        if cached_result:
+            try:
+                # Directly decode bytes without await - bytes objects are not awaitable
+                return json.loads(cached_result.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as e:
+                logger.warning(f"Failed to decode cached geocode data: {e}")
+                # Continue to fetch new data if cache parsing fails
 
         url = "https://nominatim.openstreetmap.org/search"
         params = {"q": address, "format": "json", "limit": "1"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url, params=params, headers={"User-Agent": "ELDTripPlanner/1.0"}
-            ) as response:
-                print("Response", response)
-                if response.status != 200:
-                    logger.error(f"Geocoding error: {await response.text()}")
-                    return None
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url, params=params, headers={"User-Agent": "ELDTripPlanner/1.0"}
+                ) as response:
+                    if response.status != 200:
+                        logger.error(f"Geocoding error: {await response.text()}")
+                        return None
 
-                data = await response.json()
+                    data = await response.json()
 
-                if not data:
-                    return None
+                    if not data:
+                        return None
 
-                result = {
-                    "latitude": float(data[0]["lat"]),
-                    "longitude": float(data[0]["lon"]),
-                    "display_name": data[0]["display_name"],
-                }
+                    result = {
+                        "latitude": float(data[0]["lat"]),
+                        "longitude": float(data[0]["lon"]),
+                        "display_name": data[0]["display_name"],
+                    }
 
-                # Cache the result
-                redis_client.set(cache_key, str(result), ex=CACHE_TIMEOUT)
+                    # Cache the result as JSON string instead of Python string representation
+                    redis_client.set(cache_key, json.dumps(result), ex=CACHE_TIMEOUT)
 
-                return result
+                    return result
+        except Exception as e:
+            logger.error(f"Error during geocoding: {e}")
+            return None
 
     @staticmethod
     async def get_route(
@@ -67,40 +75,48 @@ class RoutingService:
         cache_key = f"route:{start_str}:{end_str}"
         cached_result = redis_client.get(cache_key)
 
-        # if cached_result:
-        #     return dict(eval((await cached_result).decode("utf-8")))
+        if cached_result:
+            try:
+                # Directly decode bytes without await - bytes objects are not awaitable
+                return json.loads(cached_result.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as e:
+                logger.warning(f"Failed to decode cached route data: {e}")
+                # Continue to fetch new data if cache parsing fails
 
         url = f"{RoutingService.OSRM_BASE_URL}{start_str};{end_str}"
         params = {"overview": "full", "geometries": "polyline", "steps": "true"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params) as response:
-                if response.status != 200:
-                    logger.error(f"Routing error: {await response.text()}")
-                    return None
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        logger.error(f"Routing error: {await response.text()}")
+                        return None
 
-                data = await response.json()
+                    data = await response.json()
 
-                if data["code"] != "Ok" or not data["routes"]:
-                    return None
+                    if data["code"] != "Ok" or not data["routes"]:
+                        return None
 
-                route = data["routes"][0]
+                    route = data["routes"][0]
 
-                # Convert distance from meters to miles
-                distance_miles = route["distance"] * 0.000621371
+                    # Convert distance from meters to miles
+                    distance_miles = route["distance"] * 0.000621371
 
-                # Convert duration from seconds to minutes
-                duration_minutes = route["duration"] / 60
+                    # Convert duration from seconds to minutes
+                    duration_minutes = route["duration"] / 60
 
-                result = {
-                    "distance_miles": distance_miles,
-                    "duration_minutes": duration_minutes,
-                    "geometry": route["geometry"],
-                    "steps": route["legs"][0]["steps"],
-                }
-                print(5555)
+                    result = {
+                        "distance_miles": distance_miles,
+                        "duration_minutes": duration_minutes,
+                        "geometry": route["geometry"],
+                        "steps": route["legs"][0]["steps"],
+                    }
 
-                # Cache the result
-                redis_client.set(cache_key, str(result), ex=CACHE_TIMEOUT)
+                    # Cache the result as JSON string instead of Python string representation
+                    redis_client.set(cache_key, json.dumps(result), ex=CACHE_TIMEOUT)
 
-                return result
+                    return result
+        except Exception as e:
+            logger.error(f"Error during routing: {e}")
+            return None

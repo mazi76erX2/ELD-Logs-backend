@@ -1,8 +1,8 @@
 import math
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
-from ..models import ELDLog, Location, RouteSegment, Trip
+from ..models import Trip
 
 
 class ELDCalculator:

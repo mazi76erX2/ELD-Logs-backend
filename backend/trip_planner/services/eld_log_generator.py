@@ -1,304 +1,233 @@
-# backend/eld_planner/services/eld_log_generator.py
 import base64
-import json
-import math
 from datetime import datetime, timedelta
 from io import BytesIO
-from typing import Any, Dict, List, Optional
-
-import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from typing import List, Dict, Any
+import os
 
 
 class ELDLogGenerator:
-    """Service for generating ELD log sheets in the standard format."""
-
-    # Constants for the log grid
-    HOURS_IN_DAY = 24
-    STATUS_TYPES = ["OFF_DUTY", "SLEEPER_BERTH", "DRIVING", "ON_DUTY"]
+    """
+    Service for generating ELD log sheets.
+    Combines grid data, table summaries and driver/trip info to generate a log sheet.
+    """
 
     @staticmethod
-    def generate_log_sheet(log_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a complete ELD log sheet for one day."""
-        date = log_data.get("date")
-        activities = log_data.get("activities", [])
-
-        # Create the log sheet data structure
-        log_sheet = {
-            "date": date,
+    def generate_log_sheet(log_data: dict) -> dict:
+        """
+        Assemble log sheet data structure.
+        This structure might be used by the frontend.
+        """
+        grid_data = ELDLogGenerator._create_grid_data(log_data.get("activities", []))
+        hour_totals = ELDLogGenerator._calculate_hour_totals(
+            log_data.get("activities", [])
+        )
+        recap = ELDLogGenerator._calculate_recap(log_data.get("activities", []))
+        return {
+            "date": log_data.get("date"),
+            "grid_data": grid_data,
+            "hour_totals": hour_totals,
+            "recap": recap,
             "driver_info": {
-                "name": "",  # To be filled by frontend
-                "id": "",  # To be filled by frontend
-                "co_driver": "",
-                "cycle": "70 Hour / 8 Day",
+                "name": "",  # To be filled as needed
+                "id": "",
             },
-            "vehicle_info": {
-                "truck_number": "",
-                "trailer_numbers": "",
-                "shipping_docs": "",
-            },
-            "carrier_info": {"name": "", "main_office": "", "home_terminal": ""},
-            "trip_info": {"from": "", "to": "", "total_miles": 0, "remarks": ""},
-            "grid_data": ELDLogGenerator._create_grid_data(activities),
-            "hour_totals": ELDLogGenerator._calculate_hour_totals(activities),
-            "recap": ELDLogGenerator._calculate_recap(activities),
+            "vehicle_info": {},
         }
 
-        return log_sheet
-
     @staticmethod
-    def _create_grid_data(activities: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Create the grid data for the log visualization."""
-        # Initialize empty grid (24 hours x 4 status types)
+    def _create_grid_data(activities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        # Create an empty grid for 24 hours and 4 statuses
         grid = []
         for hour in range(24):
             grid.append(
                 {
                     "hour": hour,
-                    "cells": [False, False, False, False],  # One cell per status type
+                    "cells": [
+                        False,
+                        False,
+                        False,
+                        False,
+                    ],  # Order: OFF_DUTY, SLEEPER_BERTH, DRIVING, ON_DUTY
                 }
             )
-
-        # Fill in the grid based on activities
+        # Fill grid cells based on activities
         for activity in activities:
-            status_type = activity["status"]
-            start_time_str = activity["start_time"]
-            end_time_str = activity["end_time"]
+            status = activity["status"]
+            try:
+                start_time = datetime.strptime(activity["start_time"], "%H:%M")
+                end_time = datetime.strptime(activity["end_time"], "%H:%M")
+            except ValueError as e:
+                # Log the error and continue with the next activity
+                print(f"Invalid time format: {e}")
+                continue
 
-            # Parse times
-            start_time = datetime.strptime(start_time_str, "%H:%M")
-            end_time = datetime.strptime(end_time_str, "%H:%M")
-
-            # Handle overnight activities
             if end_time < start_time:
-                end_time = end_time.replace(day=start_time.day + 1)
-
-            # Convert status to index
-            status_index = ELDLogGenerator.STATUS_TYPES.index(status_type)
-
-            # Calculate duration and fill grid
-            duration_minutes = (end_time - start_time).total_seconds() / 60
-            current_time = start_time
-
-            while current_time < end_time:
-                hour = current_time.hour
+                end_time += timedelta(hours=24)
+            status_index = {
+                "OFF_DUTY": 0,
+                "SLEEPER_BERTH": 1,
+                "DRIVING": 2,
+                "ON_DUTY": 3,
+            }.get(status, 0)
+            current = start_time
+            while current < end_time:
+                hour = current.hour % 24
                 grid[hour]["cells"][status_index] = True
-
-                # Move to next 15-minute block
-                current_time += timedelta(minutes=15)
-
+                current += timedelta(minutes=15)
         return grid
 
     @staticmethod
     def _calculate_hour_totals(activities: List[Dict[str, Any]]) -> Dict[str, float]:
-        """Calculate total hours per status type."""
         totals = {"OFF_DUTY": 0, "SLEEPER_BERTH": 0, "DRIVING": 0, "ON_DUTY": 0}
-
         for activity in activities:
-            status = activity["status"]
-            start_time = datetime.strptime(activity["start_time"], "%H:%M")
-            end_time = datetime.strptime(activity["end_time"], "%H:%M")
+            try:
+                start = datetime.strptime(activity["start_time"], "%H:%M")
+                end = datetime.strptime(activity["end_time"], "%H:%M")
+            except ValueError as e:
+                print(f"Invalid time format: {e}")
+                continue
 
-            # Handle overnight activities
-            if end_time < start_time:
-                end_time = end_time.replace(day=start_time.day + 1)
-
-            # Calculate hours
-            hours = (end_time - start_time).total_seconds() / 3600
-            totals[status] += hours
-
+            if end < start:
+                end += timedelta(hours=24)
+            hours = (end - start).total_seconds() / 3600
+            if activity["status"] in totals:
+                totals[activity["status"]] += hours
         return totals
 
     @staticmethod
-    def _calculate_recap(activities: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate the recap section (simplified for now)."""
-        # This would be more complex in a real implementation
-        # It would include calculations for the 70-hour/8-day rule
-        return {
-            "today": {
-                "total_on_duty": 0,  # Calculated from activities
-                "total_driving": 0,  # Calculated from activities
-            },
-            "available_hours": {
-                "driving": 11,  # Maximum daily driving
-                "on_duty": 14,  # Maximum daily on-duty
-                "cycle": 70,  # Maximum 8-day cycle
-            },
-        }
+    def _calculate_recap(activities: List[Dict[str, Any]]) -> Dict[str, float]:
+        # Simplified recap; in a real scenario you can compute 70-hour rules, etc.
+        try:
+            total_driving = sum(
+                (
+                    datetime.strptime(act["end_time"], "%H:%M")
+                    - datetime.strptime(act["start_time"], "%H:%M")
+                ).total_seconds()
+                / 60
+                for act in activities
+                if act.get("status") == "DRIVING"
+            )
+            return {"total_driving": total_driving}
+        except ValueError as e:
+            print(f"Error calculating recap: {e}")
+            return {"total_driving": 0}
 
     @staticmethod
-    def generate_log_image(log_data: Dict[str, Any]) -> str:
-        """Generate an image of the ELD log and return as base64."""
-        # Create a new image
-        width, height = 1200, 800
-        image = Image.new("RGB", (width, height), color="white")
-        draw = ImageDraw.Draw(image)
-
-        # Try to load fonts (fallback to default if not available)
-        try:
-            title_font = ImageFont.truetype("Arial", 18)
-            header_font = ImageFont.truetype("Arial", 14)
-            normal_font = ImageFont.truetype("Arial", 12)
-            small_font = ImageFont.truetype("Arial", 10)
-        except IOError:
-            title_font = ImageFont.load_default()
-            header_font = ImageFont.load_default()
-            normal_font = ImageFont.load_default()
-            small_font = ImageFont.load_default()
-
-        # Draw title
-        draw.text(
-            (width / 2, 30),
-            "DRIVER'S DAILY LOG",
-            fill="black",
-            font=title_font,
-            anchor="mm",
-        )
-
-        # Draw date
-        date_str = (
-            log_data["date"].strftime("%m/%d/%Y")
-            if isinstance(log_data["date"], datetime)
-            else log_data["date"]
-        )
-        draw.text(
-            (width / 2, 60),
-            f"Date: {date_str}",
-            fill="black",
-            font=header_font,
-            anchor="mm",
-        )
-
-        # Draw driver info section
-        draw.rectangle([(50, 100), (width - 50, 180)], outline="black")
-        draw.line([(width / 2, 100), (width / 2, 180)], fill="black")
-        draw.text((60, 110), "Driver Name:", fill="black", font=normal_font)
-        draw.text((60, 140), "Co-Driver:", fill="black", font=normal_font)
-        draw.text((width / 2 + 10, 110), "Carrier:", fill="black", font=normal_font)
-        draw.text((width / 2 + 10, 140), "Main Office:", fill="black", font=normal_font)
-
-        # Draw vehicle info section
-        draw.rectangle([(50, 200), (width - 50, 280)], outline="black")
-        draw.line([(width / 2, 200), (width / 2, 280)], fill="black")
-        draw.text((60, 210), "Truck Number:", fill="black", font=normal_font)
-        draw.text((60, 240), "Trailer Number(s):", fill="black", font=normal_font)
-        draw.text((width / 2 + 10, 210), "From:", fill="black", font=normal_font)
-        draw.text((width / 2 + 10, 240), "To:", fill="black", font=normal_font)
-
-        # Draw grid headers
-        grid_top = 300
-        grid_left = 100
-        grid_width = width - 200
-        grid_height = 200
-        cell_width = grid_width / 24  # 24 hours
-
-        # Draw hour labels
-        for i in range(25):  # 0-24 hours (25 lines including start and end)
-            x = grid_left + i * cell_width
-            draw.line([(x, grid_top), (x, grid_top + grid_height)], fill="black")
-            if i < 24:  # Don't draw label for the 24th line
-                draw.text(
-                    (x + cell_width / 2, grid_top - 10),
-                    f"{i}",
-                    fill="black",
-                    font=small_font,
-                    anchor="mm",
-                )
-
-        # Draw status labels and horizontal lines
-        status_labels = ["OFF", "SB", "D", "ON"]
-        for i in range(5):  # 4 status types (5 lines including start and end)
-            y = grid_top + i * (grid_height / 4)
-            draw.line([(grid_left, y), (grid_left + grid_width, y)], fill="black")
-            if i < 4:  # Don't draw label for the bottom line
-                draw.text(
-                    (grid_left - 30, y + (grid_height / 8)),
-                    status_labels[i],
-                    fill="black",
-                    font=normal_font,
-                    anchor="mm",
-                )
-
-        # Draw grid data
-        grid_data = log_data.get("grid_data", [])
-        cell_height = grid_height / 4
-
-        for hour_data in grid_data:
-            hour = hour_data["hour"]
-            cells = hour_data["cells"]
-
-            for status_idx, is_active in enumerate(cells):
-                if is_active:
-                    # Fill this cell
-                    x1 = grid_left + hour * cell_width
-                    y1 = grid_top + status_idx * cell_height
-                    x2 = x1 + cell_width
-                    y2 = y1 + cell_height
-
-                    # Draw a filled rectangle
-                    draw.rectangle([(x1, y1), (x2, y2)], fill="black")
-
-        # Draw totals section
-        totals_top = grid_top + grid_height + 50
-        draw.text(
-            (width / 4, totals_top),
-            "Hours Summary",
-            fill="black",
-            font=header_font,
-            anchor="mm",
-        )
-
-        # Draw hours table
-        table_top = totals_top + 30
-        table_headers = ["", "Today", "Period"]
-        table_rows = [
-            "Off Duty",
-            "Sleeper Berth",
-            "Driving",
-            "On Duty (Not Driving)",
-            "Total",
+    def _get_font(size):
+        """
+        Try to load a font with fallbacks to ensure we always get a font.
+        """
+        font_options = [
+            # DejaVu is commonly available on Linux systems
+            ("DejaVuSans.ttf", size),
+            ("DejaVuSans-Bold.ttf", size),
+            # Liberation fonts (commonly installed with fonts-liberation)
+            ("LiberationSans-Regular.ttf", size),
+            ("LiberationSans-Bold.ttf", size),
+            # FreeSans is available on many Linux distros
+            ("FreeSans.ttf", size),
+            # Try system fonts with different paths
+            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size),
+            ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", size),
+            # As a last resort, use default
+            (None, size),
         ]
 
-        # Draw table headers
-        for i, header in enumerate(table_headers):
-            x = width / 4 + i * 100
-            draw.text(
-                (x, table_top), header, fill="black", font=normal_font, anchor="mm"
-            )
+        for font_name, font_size in font_options:
+            try:
+                if font_name is None:
+                    return ImageFont.load_default()
+                return ImageFont.truetype(font_name, font_size)
+            except (OSError, IOError) as e:
+                continue
 
-        # Draw row labels and data
-        hour_totals = log_data.get("hour_totals", {})
-        for i, row in enumerate(table_rows):
-            y = table_top + 30 + i * 25
-            draw.text(
-                (width / 4 - 100, y), row, fill="black", font=normal_font, anchor="mm"
-            )
+        # If all else fails, return default font
+        return ImageFont.load_default()
 
-            # Today's hours (simplified)
-            if row == "Off Duty":
-                value = hour_totals.get("OFF_DUTY", 0)
-            elif row == "Sleeper Berth":
-                value = hour_totals.get("SLEEPER_BERTH", 0)
-            elif row == "Driving":
-                value = hour_totals.get("DRIVING", 0)
-            elif row == "On Duty (Not Driving)":
-                value = hour_totals.get("ON_DUTY", 0)
-            elif row == "Total":
-                value = sum(hour_totals.values())
-            else:
-                value = 0
+    @staticmethod
+    def generate_log_image(log_data: dict) -> str:
+        """
+        Generate an image of the ELD log sheet using the grid and summary information.
+        Returns a base64 encoded PNG image.
+        """
+        print("Generating log image...")
+        width, height = 1200, 800
+        try:
+            image = Image.new("RGB", (width, height), color="white")
+            draw = ImageDraw.Draw(image)
 
+            # Use the font loading method with fallbacks
+            title_font = ELDLogGenerator._get_font(18)
+            header_font = ELDLogGenerator._get_font(14)
+            normal_font = ELDLogGenerator._get_font(12)
+            small_font = ELDLogGenerator._get_font(10)
+
+            # Title and date
             draw.text(
-                (width / 4, y),
-                f"{value:.1f}",
+                (width // 2, 30),
+                "DRIVER'S DAILY LOG",
                 fill="black",
-                font=normal_font,
+                font=title_font,
+                anchor="mm",
+            )
+            date_obj = log_data.get("date")
+            if isinstance(date_obj, datetime):
+                date_str = date_obj.strftime("%m/%d/%Y")
+            else:
+                date_str = str(date_obj)
+            draw.text(
+                (width // 2, 60),
+                f"Date: {date_str}",
+                fill="black",
+                font=header_font,
                 anchor="mm",
             )
 
-        # Convert to base64
-        buffer = BytesIO()
-        image.save(buffer, format="PNG")
-        img_str = base64.b64encode(buffer.getvalue()).decode()
+            # Draw a simplified grid for the daily log
+            grid_top, grid_left = 100, 100
+            grid_width, grid_height = width - 200, 300
+            cell_width = grid_width / 24.0
+            cell_height = grid_height / 4.0
 
-        return f"data:image/png;base64,{img_str}"
+            # Draw vertical (hour) grid lines and hour labels
+            for i in range(25):
+                x = grid_left + i * cell_width
+                draw.line([(x, grid_top), (x, grid_top + grid_height)], fill="grey")
+                if i < 24:
+                    draw.text(
+                        (x + cell_width / 2, grid_top - 15),
+                        f"{i}",
+                        fill="black",
+                        font=small_font,
+                        anchor="mm",
+                    )
+            # Draw horizontal lines for statuses
+            for j in range(5):
+                y = grid_top + j * cell_height
+                draw.line([(grid_left, y), (grid_left + grid_width, y)], fill="grey")
+
+            # Get grid data from generator
+            grid_data = ELDLogGenerator._create_grid_data(
+                log_data.get("activities", [])
+            )
+            for hour_info in grid_data:
+                hr = hour_info["hour"]
+                for idx, active in enumerate(hour_info["cells"]):
+                    if active:
+                        x1 = grid_left + hr * cell_width
+                        y1 = grid_top + idx * cell_height
+                        x2 = x1 + cell_width
+                        y2 = y1 + cell_height
+                        draw.rectangle([(x1, y1), (x2, y2)], fill="black")
+
+            # Convert the PIL image to a base64 string.
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            print("Image generation successful")
+            return f"data:image/png;base64,{img_str}"
+
+        except Exception as e:
+            print(f"Failed to generate log image: {e}")
+            raise RuntimeError(f"Failed to generate log image: {e}")
