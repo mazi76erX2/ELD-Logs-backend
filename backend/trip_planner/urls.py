@@ -1,13 +1,12 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .extra_views import (
-    LocationViewSet,
-    TripViewSet,
     ELDLogSheetViewSet,
+    LocationViewSet,
     RouteSegmentViewSet,
+    TripViewSet,
 )
-
 
 router = DefaultRouter()
 router.register(r"locations", LocationViewSet, basename="location")

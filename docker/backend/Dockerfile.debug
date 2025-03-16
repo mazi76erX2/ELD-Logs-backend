@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y netcat libpq5 build-essential libpq-dev
 
 # Install tools
 RUN pip3 install --progress-bar off --upgrade pip
+RUN pip3 install -U kaleido
 
 # Stage 2: Application build (smaller)
 FROM python:3.13.0-slim AS app

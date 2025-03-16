@@ -23,6 +23,11 @@ requests = "*"
 matplotlib = "*"
 pillow = "*"
 numpy = "*"
+pandas = "*"
+plotly = "*"
+kaleido = "*"
+import = "*"
+"matplotlib.pyplot" = "*"
 
 [dev-packages]
 mypy = "1.13.0"

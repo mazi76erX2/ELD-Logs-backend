@@ -29,5 +29,6 @@
         "editor.formatOnType": true
     },
     "deepscan.enable": true,
-    "deepscan.ignoreConfirmWarning": true
+    "deepscan.ignoreConfirmWarning": true,
+    "mypy.enabled": true
 }
